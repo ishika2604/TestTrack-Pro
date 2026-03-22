@@ -34,6 +34,10 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'TestTrack Pro API is running' });
 });
 
-app.listen(port, () => {
-  console.log(`[server]: Server is running at http://localhost:${port}`);
-});
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(port, () => {
+    console.log(`[server]: Server is running at http://localhost:${port}`);
+  });
+}
+
+export default app;
