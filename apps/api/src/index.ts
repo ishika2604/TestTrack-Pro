@@ -30,7 +30,7 @@ app.use('/api/bugs', bugRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/attachments', attachmentRoutes);
 
-app.get('/health', (req, res) => {
+app.get('/health', (req: express.Request, res: express.Response) => {
   res.json({ status: 'ok', message: 'TestTrack Pro API is running' });
 });
 
