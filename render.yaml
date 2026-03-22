@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: testtrack-api
+    env: node
+    region: singapore
+    buildCommand: corepack enable pnpm && pnpm install --frozen-lockfile && pnpm turbo run build --filter=api
+    startCommand: cd apps/api && npx prisma generate && node dist/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+
+  - type: web
+    name: testtrack-web
+    env: static
+    region: singapore
+    buildCommand: corepack enable pnpm && pnpm install --frozen-lockfile && pnpm turbo run build --filter=web
+    staticPublishPath: apps/web/dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: testtrack-api
+          envVarKey: RENDER_EXTERNAL_URL

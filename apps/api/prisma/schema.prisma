@@ -1,0 +1,278 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String   @id @default(uuid())
+  email             String   @unique
+  passwordHash      String
+  name              String
+  roleId            String
+  role              Role     @relation(fields: [roleId], references: [id])
+  isVerified        Boolean  @default(false)
+  verificationToken String?
+  resetToken        String?
+  resetTokenExpiry  DateTime?
+  lastLogin         DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  sessions          Session[]
+  assignedBugs      Bug[]     @relation("BugsAssignedTo")
+  reportedBugs      Bug[]     @relation("BugsReportedBy")
+  createdTests      TestCase[] @relation("TestCasesCreatedBy")
+  updatedTests      TestCase[] @relation("TestCasesLastModifiedBy")
+  testExecutions    TestExecution[]
+  comments          Comment[]
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique // ADMIN, DEVELOPER, TESTER
+  permissions String[]
+  users       User[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshToken String   @unique
+  device       String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+}
+
+model Project {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  testCases   TestCase[]
+  testSuites  TestSuite[]
+  testRuns    TestRun[]
+  bugs        Bug[]
+}
+
+model TestCase {
+  id                   String   @id @default(uuid())
+  customId             String   @unique // e.g., TC-2024-001
+  title                String
+  description          String
+  moduleId             String?
+  priority             String   @default("Medium") // Critical, High, Medium, Low
+  severity             String   @default("Minor")  // Blocker, Critical, Major, Minor, Trivial
+  type                 String   @default("Functional") // Functional, Regression, Smoke, etc.
+  status               String   @default("Draft")  // Draft, Ready for Review, Approved, etc.
+  
+  projectId            String
+  project              Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdById          String
+  createdBy            User     @relation("TestCasesCreatedBy", fields: [createdById], references: [id])
+  lastModifiedById     String?
+  lastModifiedBy       User?    @relation("TestCasesLastModifiedBy", fields: [lastModifiedById], references: [id])
+
+  version              Int      @default(1)
+  tags                 String[]
+  estimatedDuration    Int?     // in minutes
+  automationStatus     String   @default("Not Automated") // Not Automated, In Progress, Automated, Cannot Automate
+  automationScriptLink String?
+
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  steps                TestStep[]
+  preconditions        TestPrecondition[]
+  postconditions       TestPostcondition[]
+  testSuites           TestSuiteTestCase[]
+  executions           TestExecution[]
+  linkedBugs           Bug[]
+}
+
+model TestStep {
+  id             String   @id @default(uuid())
+  testCaseId     String
+  testCase       TestCase @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+  stepNumber     Int
+  action         String
+  testData       String?
+  expectedResult String
+
+  executions     StepExecution[]
+
+  @@unique([testCaseId, stepNumber])
+}
+
+model TestPrecondition {
+  id         String   @id @default(uuid())
+  testCaseId String
+  testCase   TestCase @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+  condition  String
+}
+
+model TestPostcondition {
+  id         String   @id @default(uuid())
+  testCaseId String
+  testCase   TestCase @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+  condition  String
+}
+
+model TestSuite {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  testCases   TestSuiteTestCase[]
+  runs        TestRun[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model TestSuiteTestCase {
+  suiteId     String
+  suite       TestSuite @relation(fields: [suiteId], references: [id], onDelete: Cascade)
+  testCaseId  String
+  testCase    TestCase  @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+
+  @@id([suiteId, testCaseId])
+}
+
+model TestRun {
+  id              String   @id @default(uuid())
+  name            String
+  suiteId         String
+  suite           TestSuite @relation(fields: [suiteId], references: [id])
+  projectId       String
+  project         Project   @relation(fields: [projectId], references: [id])
+  status          String    @default("Pending") // Pending, In Progress, Completed
+  targetStartDate DateTime?
+  targetEndDate   DateTime?
+  
+  executions      TestExecution[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model TestExecution {
+  id           String   @id @default(uuid())
+  testRunId    String
+  testRun      TestRun  @relation(fields: [testRunId], references: [id], onDelete: Cascade)
+  testCaseId   String
+  testCase     TestCase @relation(fields: [testCaseId], references: [id])
+  
+  executedById String?
+  executedBy   User?    @relation(fields: [executedById], references: [id])
+
+  status       String   @default("Pending") // Pending, Pass, Fail, Blocked, Skipped
+  startTime    DateTime?
+  endTime      DateTime?
+  duration     Int? // in seconds
+
+  stepResults  StepExecution[]
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model StepExecution {
+  id               String   @id @default(uuid())
+  testExecutionId  String
+  testExecution    TestExecution @relation(fields: [testExecutionId], references: [id], onDelete: Cascade)
+  stepId           String
+  step             TestStep      @relation(fields: [stepId], references: [id])
+  
+  status           String // Pass, Fail, Blocked, Skipped
+  actualResult     String?
+  notes            String?
+
+  linkedBugs       Bug[]
+
+  @@unique([testExecutionId, stepId])
+}
+
+model Bug {
+  id                String   @id @default(uuid())
+  customId          String   @unique // BUG-2024-xxx
+  title             String
+  description       String
+  stepsToReproduce  String
+  expectedBehavior  String
+  actualBehavior    String
+  
+  severity          String   @default("Minor") // Blocker, Critical, Major, Minor, Trivial
+  priority          String   @default("Medium") // P1, P2, P3, P4
+  status            String   @default("New") // New, Open, In Progress, Fixed, Verified, Closed, etc.
+  
+  environment       String?
+  affectedVersion   String?
+
+  projectId         String
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  assignedToId      String?
+  assignedTo        User?    @relation("BugsAssignedTo", fields: [assignedToId], references: [id])
+  reporterId        String
+  reporter          User     @relation("BugsReportedBy", fields: [reporterId], references: [id])
+
+  linkedTestCaseId  String?
+  linkedTestCase    TestCase? @relation(fields: [linkedTestCaseId], references: [id])
+  
+  linkedStepExecutionId String?
+  linkedStepExecution   StepExecution? @relation(fields: [linkedStepExecutionId], references: [id])
+
+  fixNotes          String?
+  linkedCommit      String?
+
+  attachments       Attachment[]
+  comments          Comment[]
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model Attachment {
+  id         String   @id @default(uuid())
+  entityType String   // "Bug", "TestCase", "TestExecution"
+  entityId   String
+  url        String
+  filename   String
+  size       Int
+  type       String   // "image/png", "text/plain"
+
+  bugId      String?
+  bug        Bug?     @relation(fields: [bugId], references: [id], onDelete: Cascade)
+
+  createdAt  DateTime @default(now())
+}
+
+model Comment {
+  id         String   @id @default(uuid())
+  entityType String   // "Bug", "TestCase"
+  entityId   String
+  text       String
+  
+  authorId   String
+  author     User     @relation(fields: [authorId], references: [id])
+
+  bugId      String?
+  bug        Bug?     @relation(fields: [bugId], references: [id], onDelete: Cascade)
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
