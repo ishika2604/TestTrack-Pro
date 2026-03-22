@@ -16,7 +16,6 @@ services:
   - type: web
     name: testtrack-web
     env: static
-    region: singapore
     buildCommand: corepack enable pnpm && pnpm install --frozen-lockfile && pnpm turbo run build --filter=web
     staticPublishPath: apps/web/dist
     envVars:
